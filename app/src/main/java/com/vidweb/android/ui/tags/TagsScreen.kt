@@ -68,15 +68,18 @@ fun TagsScreen(repo: Repo, onOpenTag: (Int, String) -> Unit) {
     var tags by remember { mutableStateOf<List<Tag>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var expanded by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var newName by remember { mutableStateOf("") }
-    var parentId by remember { mutableStateOf<Int?>(null) }
-    var parentMenu by remember { mutableStateOf(false) }
     var menuTag by remember { mutableStateOf<Tag?>(null) }
     var renameTag by remember { mutableStateOf<Tag?>(null) }
+    var createChildOf by remember { mutableStateOf<Tag?>(null) }
 
     suspend fun load() {
         loading = true
-        runCatching { ApiClient.api.tags().items }.onSuccess { tags = it }
+        runCatching { ApiClient.api.tags().items }.onSuccess { list ->
+            tags = list
+            if (expanded.isEmpty()) {
+                expanded = list.filter { it.parentId == null }.map { it.id }.toSet()
+            }
+        }
         loading = false
     }
 
@@ -85,55 +88,16 @@ fun TagsScreen(repo: Repo, onOpenTag: (Int, String) -> Unit) {
     val children = remember(tags) { tags.groupBy { it.parentId ?: 0 } }
 
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    singleLine = true,
-                    label = { Text("新标签名称") },
-                    modifier = Modifier.weight(1f),
-                )
-                Box {
-                    TextButton(onClick = { parentMenu = true }) {
-                        Text(tags.firstOrNull { it.id == parentId }?.name ?: "无父标签")
-                    }
-                    DropdownMenu(expanded = parentMenu, onDismissRequest = { parentMenu = false }) {
-                        DropdownMenuItem(text = { Text("无父标签") }, onClick = {
-                            parentMenu = false
-                            parentId = null
-                        })
-                        for (tag in tags) {
-                            DropdownMenuItem(text = { Text(tag.name) }, onClick = {
-                                parentMenu = false
-                                parentId = tag.id
-                            })
-                        }
-                    }
-                }
-                Button(onClick = {
-                    val name = newName.trim()
-                    if (name.isNotEmpty()) {
-                        scope.launch {
-                            runCatching { ApiClient.api.createTag(TagCreateBody(name, parentId)) }
-                            newName = ""
-                            load()
-                        }
-                    }
-                }) { Text("新建") }
-            }
-        }
-
         Text(
-            "共 ${tags.size} 个标签",
+            "共 ${tags.size} 个标签 · 点 ⋯ 可新建子标签",
             color = TextDim,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
         )
 
         when {
             loading -> LoadingBox()
-            tags.isEmpty() -> EmptyHint("暂无标签，可在上方创建")
+            tags.isEmpty() -> EmptyHint("暂无标签")
             else -> LazyColumn(Modifier.weight(1f)) {
                 val rows = buildList {
                     fun walk(tag: Tag, depth: Int) {
@@ -175,7 +139,11 @@ fun TagsScreen(repo: Repo, onOpenTag: (Int, String) -> Unit) {
                                 .background(parseColor(tag.color)),
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text(tag.name, modifier = Modifier.weight(1f))
+                        Text(
+                            tag.name,
+                            modifier = Modifier.weight(1f),
+                            style = if (tag.parentId == null) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium,
+                        )
                         Text(
                             "${tag.subtreeCount}",
                             color = TextDim,
@@ -192,6 +160,7 @@ fun TagsScreen(repo: Repo, onOpenTag: (Int, String) -> Unit) {
         ActionSheet(
             title = tag.name,
             actions = buildList {
+                add("新建子标签" to { createChildOf = tag })
                 add("重命名" to { renameTag = tag })
                 add("设置颜色" to {
                     scope.launch {
@@ -209,6 +178,23 @@ fun TagsScreen(repo: Repo, onOpenTag: (Int, String) -> Unit) {
                 })
             },
             onDismiss = { menuTag = null },
+        )
+    }
+
+    createChildOf?.let { parent ->
+        PromptDialog(
+            title = "在「${parent.name}」下新建子标签",
+            onDismiss = { createChildOf = null },
+            onConfirm = { name ->
+                createChildOf = null
+                if (name.isNotBlank()) {
+                    scope.launch {
+                        runCatching { ApiClient.api.createTag(TagCreateBody(name, parent.id)) }
+                        expanded = expanded + parent.id
+                        load()
+                    }
+                }
+            },
         )
     }
 

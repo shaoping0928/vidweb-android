@@ -41,7 +41,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -216,6 +218,7 @@ private fun PlayerScreen(
     var editComment by remember { mutableStateOf<CommentItem?>(null) }
     var showTagPicker by remember { mutableStateOf(false) }
     var menuShot by remember { mutableStateOf<Screenshot?>(null) }
+    var showMore by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(0f) }
 
@@ -822,7 +825,7 @@ private fun PlayerScreen(
                 volume = player.volume,
                 muted = player.volume <= 0.001f,
                 danmakuOn = danmakuOn,
-                fullscreen = fullscreen,
+                landscape = landscape,
                 comments = comments,
                 previewUrl = if (dragging) previewUrl else null,
                 onBack = { activity.finish() },
@@ -863,8 +866,31 @@ private fun PlayerScreen(
                     locked = true
                     showControls = false
                 },
+                onMore = { showMore = true },
             )
         }
+    }
+
+    if (showMore) {
+        ActionSheet(
+            title = "更多",
+            actions = listOf(
+                "截图" to { captureScreenshot() },
+                "锁定屏幕" to {
+                    locked = true
+                    showControls = false
+                },
+                "画面比例" to {
+                    resizeMode = when (resizeMode) {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                },
+                "音量" to { volumeDialog = true },
+            ),
+            onDismiss = { showMore = false },
+        )
     }
 
     if (speedDialog) {
@@ -1106,7 +1132,7 @@ private fun PlayerControls(
     volume: Float,
     muted: Boolean,
     danmakuOn: Boolean,
-    fullscreen: Boolean,
+    landscape: Boolean,
     comments: List<CommentItem>,
     previewUrl: String?,
     onBack: () -> Unit,
@@ -1125,6 +1151,7 @@ private fun PlayerControls(
     onPanel: () -> Unit,
     onFullscreen: () -> Unit,
     onLock: () -> Unit,
+    onMore: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
         Row(
@@ -1152,9 +1179,6 @@ private fun PlayerControls(
                     modifier = Modifier.padding(end = 8.dp),
                 )
             }
-            IconButton(onClick = onLock) {
-                Icon(Icons.Filled.Lock, contentDescription = "锁定", tint = Color.White)
-            }
         }
 
         Row(
@@ -1174,6 +1198,23 @@ private fun PlayerControls(
             }
             IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White, modifier = Modifier.size(40.dp))
+            }
+        }
+
+        if (landscape) {
+            Column(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                IconButton(onClick = onSnapshot) {
+                    Icon(Icons.Filled.PhotoCamera, contentDescription = "截图", tint = Color.White)
+                }
+                IconButton(onClick = onLock) {
+                    Icon(Icons.Filled.Lock, contentDescription = "锁定", tint = Color.White)
+                }
             }
         }
 
@@ -1222,19 +1263,46 @@ private fun PlayerControls(
                 }
                 Text(Format.time(duration), color = Color.White, style = MaterialTheme.typography.labelSmall)
             }
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                TextButton(onClick = onSpeed) { Text("${String.format(java.util.Locale.US, "%.1f", speed)}x", color = Color.White) }
-                TextButton(onClick = onVolume) { Text(if (muted) "静音" else "${(volume * 100).toInt()}", color = Color.White) }
-                TextButton(onClick = onDanmaku) { Text(if (danmakuOn) "弹幕开" else "弹幕关", color = if (danmakuOn) Accent else Color.White) }
-                TextButton(onClick = onAspect) { Text("画面", color = Color.White) }
-                TextButton(onClick = onSnapshot) { Text("截图", color = Color.White) }
-                TextButton(onClick = onPanel) { Text("面板", color = Color.White) }
-                IconButton(onClick = onFullscreen) {
-                    Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
+            if (landscape) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    TextButton(onClick = onDanmaku) {
+                        Text(if (danmakuOn) "弹幕开" else "弹幕关", color = if (danmakuOn) Accent else Color.White)
+                    }
+                    TextButton(onClick = onVolume) {
+                        Text(if (muted) "静音" else "${(volume * 100).toInt()}", color = Color.White)
+                    }
+                    TextButton(onClick = onSpeed) {
+                        Text("${String.format(java.util.Locale.US, "%.1f", speed)}x", color = Color.White)
+                    }
+                    TextButton(onClick = onAspect) { Text("画面", color = Color.White) }
+                    TextButton(onClick = onPanel) { Text("选集", color = Color.White) }
+                    IconButton(onClick = onFullscreen) {
+                        Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
+                    }
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    TextButton(onClick = onDanmaku) {
+                        Text(if (danmakuOn) "弹幕开" else "弹幕关", color = if (danmakuOn) Accent else Color.White)
+                    }
+                    TextButton(onClick = onSpeed) {
+                        Text("${String.format(java.util.Locale.US, "%.1f", speed)}x", color = Color.White)
+                    }
+                    TextButton(onClick = onPanel) { Text("选集", color = Color.White) }
+                    IconButton(onClick = onFullscreen) {
+                        Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
+                    }
+                    IconButton(onClick = onMore) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
+                    }
                 }
             }
         }

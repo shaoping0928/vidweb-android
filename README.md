@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力。后端无需改动，仅需在客户端填写服务器地址。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.2**。
 
 ## 已实现功能
 
@@ -20,13 +20,13 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 ### 视频库
 - 筛选：文件名、状态（全部/未播放/有进度/已播放/失效）、时长（4 档）、标签（任一/全部）、排序（7 种）
 - 智能合集：应用筛选、保存当前筛选、管理（重命名 / 用当前筛选更新 / 删除）、数量徽标
-- 卡片网格（16:9 缩略图、续播进度条、失效标记），树形模式逐层下钻（可整目录播放）
+- 卡片网格（16:9 缩略图、续播进度条、失效标记）；树形模式在列表内原地展开/收起目录（可整目录播放）
 - 多选：长按进入，全选当前显示、加入/移出播放列表、批量打标签
 - 「重置筛选」「从媒体库恢复」、分页
 
 ### 搜索 / 标签 / 任务 / 设置
 - 搜索文件名、标签、评论；结果可播放、加入列表、查看详情
-- 标签：层级树展开、新建（可选父标签）、重命名、循环换色、删除；点击标签查看该标签下视频
+- 标签：层级树，默认根标签「全部标签」（首次加载自动展开）；每个标签右侧 ⋯ 菜单：新建子标签（弹窗输入名称）、重命名、设置颜色、删除；点击标签查看该标签及子标签下视频
 - 任务：列表 + 进度条 + 状态，2 秒轮询，可删除记录
 - 设置：服务器地址、监听地址/端口、ffmpeg/ffprobe 路径与检测、服务端转码开关与硬件编码器、访问日志开关、播放器默认值（音量/倍速/弹幕/弹幕速度）、每页条数、关于
 
@@ -35,7 +35,18 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 - 实时转码播放：`/api/transcode/stream?path=&start=`，seek = 以目标位置重新请求流；显示编码器/直通标签
 - 坏片段容错：流中断自动从当前位置 +8s 跳过（最多 4 次），失败后保留流模式可拖动重试
 - 无帧看门狗：播放 6 秒无首帧自动切实时转码或提示
-- 控制：上一个/播放暂停/下一个、进度条拖动、倍速（0.5–4.0x）、音量、静音、弹幕开关、画面比例（适应/裁剪/拉伸）、截图、面板、全屏（横屏 + 沉浸）
+- 控制栏按横竖屏分级（自动隐藏，点按画面呼出；显示时顶/底区域手势自动让位）：
+  - 竖屏：播放/暂停、上一个/下一个、进度条、弹幕、倍速（0.5–4.0x）、选集、全屏、更多（⋯）
+  - 横屏：弹幕、音量、倍速、画面比例、选集、全屏，画面右侧竖排「截图 / 锁定」
+  - 更多（⋯）：截图、锁定屏幕、画面比例（适应/裁剪/拉伸）、音量
+- 进度条：拖动显示预览缩略图与时间气泡；叠加评论标记点，点击跳转
+- 手势（可在设置「播放器手势」逐项开关）：
+  - 左右滑动调进度（灵敏度 0.3–3.0x，画面中央显示目标时间）
+  - 长按加速播放（默认 2.0x，可调 1.5–4.0x，松手恢复）
+  - 双击：左 35% 快退 / 右 35% 快进（默认 10 秒，可调 5–30 秒），中间播放/暂停；单击呼出控制栏
+  - 左半屏上下滑动调亮度、右半屏上下滑动调音量（实时生效并显示 OSD）
+  - 双指缩放/平移画面
+  - 锁定屏幕：屏蔽手势与控制，点左上角锁图标解锁
 - 续播：读取 `last_position_ms` 自动跳转并提示；播放中每 5 秒 / 暂停时上报进度；播完清除续播点
 - 播放记录：开始播放上报 `played`；播放结束仅暂停（不自动下一个）
 - 右侧面板（底部弹层 5 个 Tab）：
@@ -45,6 +56,11 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
   - 截图：抓取当前画面（PixelCopy）上传服务端、网格浏览、删除
   - 最近播放：列表播放（替换队列）、刷新、清空
 - 弹幕：评论按时间轴从右向左滚动，开关与速度跟随设置（`mw/danmaku`、`mw/danmakuSpeed`）
+
+### 性能优化
+- Release 构建开启 R8 代码压缩 + 资源压缩，APK 从约 18 MB 降到约 2.8 MB
+- 缩略图仅在条目可见时轮询重试（4 秒 × 30 次）；`MediaEntry` 标注 `@Immutable` 并用 `remember` 缓存，Coil `ImageRequest` 复用
+- 播放器启用解码器自动回退（`setEnableDecoderFallback`）与无帧看门狗，减少黑屏/硬解失败
 
 ## 技术栈
 
@@ -70,8 +86,9 @@ app/src/main/java/com/vidweb/android/
     Prefs.kt             DataStore 服务器地址
     Repo.kt              app_state 偏好缓存与常用操作
   player/
-    PlayerActivity.kt    ExoPlayer 播放页（控制、面板、截图、容错）
+    PlayerActivity.kt    ExoPlayer 播放页（控制栏、面板、截图、容错、锁屏、预览）
     PlayerLauncher.kt    播放启动入口（paths + index）
+    Gestures.kt          手势系统（GesturePrefs + Modifier.playerGestures）
     Danmaku.kt           弹幕 Canvas 覆盖层
   ui/
     theme/Theme.kt       Material3 深色主题
@@ -90,11 +107,12 @@ sdk.dir=E\:\\jdk\\android
 
 ```powershell
 $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
-.\gradlew.bat assembleDebug
-# 产物：app/build/outputs/apk/debug/app-debug.apk
+.\gradlew.bat assembleDebug assembleRelease
+# debug：app/build/outputs/apk/debug/app-debug.apk
+# release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证 `assembleDebug` 构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.2-release.apk`（约 2.8 MB）与 `vidweb-1.1.2-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 
@@ -102,10 +120,10 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 
 - 播放列表排序用 ↑/↓ 按钮（移动端拖拽体验差）；Web 为拖动。
 - 路径库侧栏、右键菜单改为底部操作表；悬停预览改为长按。
-- 树形模式逐层下钻（面包屑返回），不做一次性完整树展开。
 - 截图需要 Android 8.0+（PixelCopy；8.0 以下提示不支持）。
-- 进度条评论标记点、m3u 保存/加载、目录改路径等接口已封装但未接 UI，可后续补充。
-- 未实现：画中画、后台音频、手势亮度/音量、投屏。
+- 未接 UI 的接口：m3u 保存/加载、目录改路径等，可后续补充。
+- 未实现：画中画、后台音频、投屏。
+- 移动端增强（Web 没有）：手势调进度/亮度/音量/缩放、长按倍速、双击快进、锁屏、横屏侧边栏。
 
 ## 注意事项
 
