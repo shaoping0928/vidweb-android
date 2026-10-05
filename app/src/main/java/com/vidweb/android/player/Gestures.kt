@@ -58,8 +58,9 @@ fun Modifier.playerGestures(
 
     pointerInput(enabled, prefs, controlsVisible) {
         if (!enabled) return@pointerInput
-        val excludeTop = if (controlsVisible) 56.dp.toPx() else 0f
-        val excludeBottom = if (controlsVisible) 150.dp.toPx() else 0f
+        val compact = size.height < 360.dp.toPx()
+        val excludeTop = if (controlsVisible) (if (compact) 48.dp else 56.dp).toPx() else 0f
+        val excludeBottom = if (controlsVisible) (if (compact) 96.dp else 150.dp).toPx() else 0f
         coroutineScope {
             awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)

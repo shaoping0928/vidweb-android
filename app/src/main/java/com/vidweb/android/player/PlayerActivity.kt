@@ -52,7 +52,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -659,13 +658,84 @@ private fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(landscape) {
+        if (!landscape) showPanel = false
+    }
+
     BackHandler { activity.finish() }
+
+    val panelContent: @Composable () -> Unit = {
+        PlayerPanel(
+            panelTab = panelTab,
+            onTabChange = { panelTab = it },
+            detail = detail,
+            path = path,
+            repo = repo,
+            onEditTags = { showTagPicker = true },
+            queue = queue,
+            currentIndex = index,
+            onPlayIndex = { playAt(it) },
+            onRemoveQueue = { i ->
+                if (i in queue.indices) {
+                    val wasCurrent = i == index
+                    queue.removeAt(i)
+                    if (queue.isEmpty()) {
+                        activity.finish()
+                    } else if (wasCurrent) {
+                        index = i.coerceAtMost(queue.size - 1)
+                        playAt(index)
+                    } else if (i < index) {
+                        index -= 1
+                    }
+                }
+            },
+            onMoveQueue = { from, to ->
+                if (from in queue.indices && to in queue.indices && from != to) {
+                    val item = queue.removeAt(from)
+                    queue.add(to, item)
+                    if (index == from) index = to
+                    else if (from < index && to >= index) index -= 1
+                    else if (from > index && to <= index) index += 1
+                }
+            },
+            comments = comments,
+            onSeekTo = { doSeek(it) },
+            onAddComment = { addCommentDialog = true },
+            onEditComment = { editComment = it },
+            onDeleteComment = { comment ->
+                scope.launch {
+                    runCatching { ApiClient.api.deleteComment(comment.id) }
+                    loadComments()
+                }
+            },
+            shots = shots,
+            onCapture = { captureScreenshot() },
+            onShotMenu = { menuShot = it },
+            recent = recent,
+            onPlayRecent = { item ->
+                val paths = recent.map { it.path }
+                queue.clear()
+                queue.addAll(paths)
+                playAt(paths.indexOf(item.path).coerceAtLeast(0))
+                showPanel = false
+            },
+            onRefreshRecent = { loadRecent() },
+            onClearRecent = {
+                scope.launch {
+                    runCatching { ApiClient.api.clearRecent() }
+                    loadRecent()
+                }
+            },
+        )
+    }
 
     /* ------------------------------------------------------------ ui */
 
+    Column(Modifier.fillMaxSize().background(Color.Black)) {
     Box(
         Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .then(if (landscape) Modifier.fillMaxSize() else Modifier.aspectRatio(16f / 9f))
             .background(Color.Black)
             .onSizeChanged { viewSize = it }
             .playerGestures(
@@ -868,6 +938,16 @@ private fun PlayerScreen(
         }
     }
 
+    if (!landscape) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            color = MaterialTheme.colorScheme.background,
+        ) {
+            panelContent()
+        }
+    }
+    }
+
     if (speedDialog) {
         var value by remember { mutableStateOf(player.playbackParameters.speed) }
         AlertDialog(
@@ -912,95 +992,22 @@ private fun PlayerScreen(
         )
     }
 
-    val panelContent: @Composable () -> Unit = {
-        PlayerPanel(
-            panelTab = panelTab,
-            onTabChange = { panelTab = it },
-            detail = detail,
-            path = path,
-            repo = repo,
-            onEditTags = { showTagPicker = true },
-            queue = queue,
-            currentIndex = index,
-            onPlayIndex = { playAt(it) },
-            onRemoveQueue = { i ->
-                if (i in queue.indices) {
-                    val wasCurrent = i == index
-                    queue.removeAt(i)
-                    if (queue.isEmpty()) {
-                        activity.finish()
-                    } else if (wasCurrent) {
-                        index = i.coerceAtMost(queue.size - 1)
-                        playAt(index)
-                    } else if (i < index) {
-                        index -= 1
-                    }
-                }
-            },
-            onMoveQueue = { from, to ->
-                if (from in queue.indices && to in queue.indices && from != to) {
-                    val item = queue.removeAt(from)
-                    queue.add(to, item)
-                    if (index == from) index = to
-                    else if (from < index && to >= index) index -= 1
-                    else if (from > index && to <= index) index += 1
-                }
-            },
-            comments = comments,
-            onSeekTo = { doSeek(it) },
-            onAddComment = { addCommentDialog = true },
-            onEditComment = { editComment = it },
-            onDeleteComment = { comment ->
-                scope.launch {
-                    runCatching { ApiClient.api.deleteComment(comment.id) }
-                    loadComments()
-                }
-            },
-            shots = shots,
-            onCapture = { captureScreenshot() },
-            onShotMenu = { menuShot = it },
-            recent = recent,
-            onPlayRecent = { item ->
-                val paths = recent.map { it.path }
-                queue.clear()
-                queue.addAll(paths)
-                playAt(paths.indexOf(item.path).coerceAtLeast(0))
-                showPanel = false
-            },
-            onRefreshRecent = { loadRecent() },
-            onClearRecent = {
-                scope.launch {
-                    runCatching { ApiClient.api.clearRecent() }
-                    loadRecent()
-                }
-            },
-        )
-    }
-
-    if (showPanel) {
-        if (landscape) {
-            Box(Modifier.fillMaxSize()) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f))
-                        .clickable { showPanel = false },
-                )
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight()
-                        .width(400.dp),
-                ) {
-                    panelContent()
-                }
-            }
-        } else {
-            ModalBottomSheet(onDismissRequest = { showPanel = false }) {
-                Box(Modifier.fillMaxWidth().height(520.dp)) {
-                    panelContent()
-                }
+    if (showPanel && landscape) {
+        Box(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable { showPanel = false },
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(400.dp),
+            ) {
+                panelContent()
             }
         }
     }
@@ -1156,22 +1163,34 @@ private fun PlayerControls(
         }
 
         Row(
-            Modifier.align(Alignment.Center),
+            Modifier
+                .align(Alignment.Center)
+                .offset(y = if (landscape) 0.dp else (-26).dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一个", tint = Color.White, modifier = Modifier.size(40.dp))
+            IconButton(onClick = onPrev, modifier = Modifier.size(if (landscape) 56.dp else 40.dp)) {
+                Icon(
+                    Icons.Filled.SkipPrevious,
+                    contentDescription = "上一个",
+                    tint = Color.White,
+                    modifier = Modifier.size(if (landscape) 40.dp else 28.dp),
+                )
             }
-            IconButton(onClick = onToggle, modifier = Modifier.size(72.dp)) {
+            IconButton(onClick = onToggle, modifier = Modifier.size(if (landscape) 72.dp else 52.dp)) {
                 Icon(
                     if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = if (playing) "暂停" else "播放",
                     tint = Color.White,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(if (landscape) 56.dp else 40.dp),
                 )
             }
-            IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White, modifier = Modifier.size(40.dp))
+            IconButton(onClick = onNext, modifier = Modifier.size(if (landscape) 56.dp else 40.dp)) {
+                Icon(
+                    Icons.Filled.SkipNext,
+                    contentDescription = "下一个",
+                    tint = Color.White,
+                    modifier = Modifier.size(if (landscape) 40.dp else 28.dp),
+                )
             }
         }
 
@@ -1270,7 +1289,6 @@ private fun PlayerControls(
                     TextButton(onClick = onSpeed) {
                         Text("${String.format(java.util.Locale.US, "%.1f", speed)}x", color = Color.White)
                     }
-                    TextButton(onClick = onPanel) { Text("更多", color = Color.White) }
                     IconButton(onClick = onFullscreen) {
                         Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
                     }

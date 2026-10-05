@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.4**。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.5**。
 
 ## 已实现功能
 
@@ -36,10 +36,11 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 - 实时转码播放：`/api/transcode/stream?path=&start=`，seek = 以目标位置重新请求流；显示编码器/直通标签
 - 坏片段容错：流中断自动从当前位置 +8s 跳过（最多 4 次），失败后保留流模式可拖动重试
 - 无帧看门狗：播放 6 秒无首帧自动切实时转码或提示
+- 竖屏页面（B 站式）：上方 16:9 播放器，下方内容区（5 个 Tab：详情 / 播放列表 / 评论 / 截图 / 最近）随页面滚动；手势仅在播放器区域生效
 - 控制栏按横竖屏分级（自动隐藏，点按画面呼出；显示时顶/底区域手势自动让位）：
-  - 竖屏：播放/暂停、上一个/下一个、进度条、弹幕、倍速（0.5–4.0x）、更多、全屏
+  - 竖屏（紧凑）：播放/暂停、上一个/下一个、进度条、弹幕、倍速（0.5–4.0x）、全屏
   - 横屏：弹幕、音量、倍速、画面比例、更多、全屏，画面右侧竖排「截图 / 锁定」
-  - 「更多」打开底部面板（5 个 Tab）：详情 / 播放列表 / 评论 / 截图 / 最近
+  - 横屏「更多」打开右侧面板（同一套 5 个 Tab）
 - 进度条：拖动显示预览缩略图与时间气泡；叠加评论标记点，点击跳转
 - 手势（可在设置「播放器手势」逐项开关）：
   - 左右滑动调进度（灵敏度 0.3–3.0x，画面中央显示目标时间）
@@ -50,7 +51,7 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
   - 锁定屏幕：屏蔽手势与控制，点左上角锁图标解锁
 - 续播：读取 `last_position_ms` 自动跳转并提示；播放中每 5 秒 / 暂停时上报进度；播完清除续播点
 - 播放记录：开始播放上报 `played`；播放结束仅暂停（不自动下一个）
-- 右侧面板（底部弹层 5 个 Tab）：
+- 右侧面板（竖屏内容区 / 横屏右侧弹层，5 个 Tab）：
   - 详情：时长/分辨率/大小/播放次数/续播点/评论数/路径，标签编辑，加入/移出播放列表
   - 播放列表：当前队列，点击切换，↑/↓ 调整顺序，✕ 移除（删除当前项自动切下一个）
   - 评论：列表点击跳转时间点，当前位置添加、编辑、删除
@@ -113,7 +114,7 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 # release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.4-release.apk`（约 2.8 MB）与 `vidweb-1.1.4-debug.apk`。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.5-release.apk`（约 2.8 MB）与 `vidweb-1.1.5-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 
