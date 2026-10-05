@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -388,19 +389,32 @@ private fun PlayerScreen(
         }
     }
 
-    fun toggleFullscreen() {
-        fullscreen = !fullscreen
-        activity.requestedOrientation = if (fullscreen) {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+    fun enterFullscreen() {
+        fullscreen = true
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-        if (fullscreen) {
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
+    fun exitFullscreen() {
+        fullscreen = false
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        controller.show(WindowInsetsCompat.Type.systemBars())
+    }
+
+    fun toggleFullscreen() {
+        if (landscape || fullscreen) exitFullscreen() else enterFullscreen()
+    }
+
+    fun handleBack() {
+        if (showPanel) {
+            showPanel = false
+        } else if (landscape || fullscreen) {
+            exitFullscreen()
         } else {
-            controller.show(WindowInsetsCompat.Type.systemBars())
+            activity.finish()
         }
     }
 
@@ -662,7 +676,7 @@ private fun PlayerScreen(
         if (!landscape) showPanel = false
     }
 
-    BackHandler { activity.finish() }
+    BackHandler { handleBack() }
 
     val panelContent: @Composable () -> Unit = {
         PlayerPanel(
@@ -896,7 +910,7 @@ private fun PlayerScreen(
                 landscape = landscape,
                 comments = comments,
                 previewUrl = if (dragging) previewUrl else null,
-                onBack = { activity.finish() },
+                onBack = { handleBack() },
                 onPrev = { playAt(index - 1) },
                 onNext = { playAt(index + 1) },
                 onToggle = { if (player.isPlaying) player.pause() else player.play() },
@@ -1138,18 +1152,24 @@ private fun PlayerControls(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .padding(horizontal = 4.dp)
                 .align(Alignment.TopCenter),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = Color.White)
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
             }
             Text(
                 title,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.weight(1f),
             )
             if (streamMode) {
@@ -1157,40 +1177,52 @@ private fun PlayerControls(
                     streamLabel.ifBlank { "转码" },
                     color = Accent,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier.padding(end = 6.dp),
                 )
+            }
+            if (!landscape) {
+                TextButton(
+                    onClick = onDanmaku,
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    Text(
+                        if (danmakuOn) "弹幕开" else "弹幕关",
+                        color = if (danmakuOn) Accent else Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                TextButton(
+                    onClick = onSpeed,
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    Text(
+                        "${String.format(java.util.Locale.US, "%.1f", speed)}x",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
         }
 
-        Row(
-            Modifier
-                .align(Alignment.Center)
-                .offset(y = if (landscape) 0.dp else (-26).dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onPrev, modifier = Modifier.size(if (landscape) 56.dp else 40.dp)) {
-                Icon(
-                    Icons.Filled.SkipPrevious,
-                    contentDescription = "上一个",
-                    tint = Color.White,
-                    modifier = Modifier.size(if (landscape) 40.dp else 28.dp),
-                )
-            }
-            IconButton(onClick = onToggle, modifier = Modifier.size(if (landscape) 72.dp else 52.dp)) {
-                Icon(
-                    if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (playing) "暂停" else "播放",
-                    tint = Color.White,
-                    modifier = Modifier.size(if (landscape) 56.dp else 40.dp),
-                )
-            }
-            IconButton(onClick = onNext, modifier = Modifier.size(if (landscape) 56.dp else 40.dp)) {
-                Icon(
-                    Icons.Filled.SkipNext,
-                    contentDescription = "下一个",
-                    tint = Color.White,
-                    modifier = Modifier.size(if (landscape) 40.dp else 28.dp),
-                )
+        if (landscape) {
+            Row(
+                Modifier.align(Alignment.Center),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onPrev, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = "上一个", tint = Color.White, modifier = Modifier.size(40.dp))
+                }
+                IconButton(onClick = onToggle, modifier = Modifier.size(72.dp)) {
+                    Icon(
+                        if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (playing) "暂停" else "播放",
+                        tint = Color.White,
+                        modifier = Modifier.size(56.dp),
+                    )
+                }
+                IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White, modifier = Modifier.size(40.dp))
+                }
             }
         }
 
@@ -1211,7 +1243,7 @@ private fun PlayerControls(
             }
         }
 
-        Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(10.dp)) {
+        Column(Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(horizontal = 8.dp, vertical = 6.dp)) {
             if (previewUrl != null) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Surface(color = Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(8.dp)) {
@@ -1224,39 +1256,39 @@ private fun PlayerControls(
                 }
                 Spacer(Modifier.height(6.dp))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(Format.time(position), color = Color.White, style = MaterialTheme.typography.labelSmall)
-                BoxWithConstraints(Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                    val trackWidth = maxWidth
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Slider(
-                            value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1).toFloat()),
-                            onValueChange = {
-                                onSeekStart(it)
-                                onSeekChange(it)
-                            },
-                            onValueChangeFinished = onSeekEnd,
-                            valueRange = 0f..duration.coerceAtLeast(1).toFloat(),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        if (duration > 0) {
-                            for (comment in comments) {
-                                val fraction = (comment.positionMs.toFloat() / duration).coerceIn(0f, 1f)
-                                Box(
-                                    Modifier
-                                        .offset(x = trackWidth * fraction - 3.dp)
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(Accent)
-                                        .clickable { onMarkerClick(comment.positionMs) },
-                                )
+            if (landscape) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(Format.time(position), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    BoxWithConstraints(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        val trackWidth = maxWidth
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Slider(
+                                value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1).toFloat()),
+                                onValueChange = {
+                                    onSeekStart(it)
+                                    onSeekChange(it)
+                                },
+                                onValueChangeFinished = onSeekEnd,
+                                valueRange = 0f..duration.coerceAtLeast(1).toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (duration > 0) {
+                                for (comment in comments) {
+                                    val fraction = (comment.positionMs.toFloat() / duration).coerceIn(0f, 1f)
+                                    Box(
+                                        Modifier
+                                            .offset(x = trackWidth * fraction - 3.dp)
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Accent)
+                                            .clickable { onMarkerClick(comment.positionMs) },
+                                    )
+                                }
                             }
                         }
                     }
+                    Text(Format.time(duration), color = Color.White, style = MaterialTheme.typography.labelSmall)
                 }
-                Text(Format.time(duration), color = Color.White, style = MaterialTheme.typography.labelSmall)
-            }
-            if (landscape) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1278,19 +1310,56 @@ private fun PlayerControls(
                     }
                 }
             } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    TextButton(onClick = onDanmaku) {
-                        Text(if (danmakuOn) "弹幕开" else "弹幕关", color = if (danmakuOn) Accent else Color.White)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onPrev, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Filled.SkipPrevious, contentDescription = "上一个", tint = Color.White, modifier = Modifier.size(22.dp))
                     }
-                    TextButton(onClick = onSpeed) {
-                        Text("${String.format(java.util.Locale.US, "%.1f", speed)}x", color = Color.White)
+                    IconButton(onClick = onToggle, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (playing) "暂停" else "播放",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp),
+                        )
                     }
-                    IconButton(onClick = onFullscreen) {
-                        Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
+                    IconButton(onClick = onNext, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Filled.SkipNext, contentDescription = "下一个", tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+                    BoxWithConstraints(Modifier.weight(1f).padding(horizontal = 2.dp)) {
+                        val trackWidth = maxWidth
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Slider(
+                                value = position.toFloat().coerceIn(0f, duration.coerceAtLeast(1).toFloat()),
+                                onValueChange = {
+                                    onSeekStart(it)
+                                    onSeekChange(it)
+                                },
+                                onValueChangeFinished = onSeekEnd,
+                                valueRange = 0f..duration.coerceAtLeast(1).toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (duration > 0) {
+                                for (comment in comments) {
+                                    val fraction = (comment.positionMs.toFloat() / duration).coerceIn(0f, 1f)
+                                    Box(
+                                        Modifier
+                                            .offset(x = trackWidth * fraction - 3.dp)
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(Accent)
+                                            .clickable { onMarkerClick(comment.positionMs) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "${Format.time(position)}/${Format.time(duration)}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    IconButton(onClick = onFullscreen, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             }

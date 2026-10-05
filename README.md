@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.5**。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.6**。
 
 ## 已实现功能
 
@@ -37,10 +37,11 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 - 坏片段容错：流中断自动从当前位置 +8s 跳过（最多 4 次），失败后保留流模式可拖动重试
 - 无帧看门狗：播放 6 秒无首帧自动切实时转码或提示
 - 竖屏页面（B 站式）：上方 16:9 播放器，下方内容区（5 个 Tab：详情 / 播放列表 / 评论 / 截图 / 最近）随页面滚动；手势仅在播放器区域生效
-- 控制栏按横竖屏分级（自动隐藏，点按画面呼出；显示时顶/底区域手势自动让位）：
-  - 竖屏（紧凑）：播放/暂停、上一个/下一个、进度条、弹幕、倍速（0.5–4.0x）、全屏
+- 控制栏参考主流播放器（自动隐藏，点按画面呼出；显示时顶/底区域手势自动让位）：
+  - 竖屏（紧凑）：顶栏 返回 + 标题 + 弹幕/倍速；底栏 上一个/播放暂停/下一个 + 进度条（评论标记点）+ 时间 + 全屏
   - 横屏：弹幕、音量、倍速、画面比例、更多、全屏，画面右侧竖排「截图 / 锁定」
   - 横屏「更多」打开右侧面板（同一套 5 个 Tab）
+- 返回逻辑：全屏（横屏）时按返回键或左上角返回先退出全屏回竖屏，再按才退出播放页；横屏面板打开时返回先关面板
 - 进度条：拖动显示预览缩略图与时间气泡；叠加评论标记点，点击跳转
 - 手势（可在设置「播放器手势」逐项开关）：
   - 左右滑动调进度（灵敏度 0.3–3.0x，画面中央显示目标时间）
@@ -114,7 +115,7 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 # release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.5-release.apk`（约 2.8 MB）与 `vidweb-1.1.5-debug.apk`。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.6-release.apk`（约 2.8 MB）与 `vidweb-1.1.6-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 
