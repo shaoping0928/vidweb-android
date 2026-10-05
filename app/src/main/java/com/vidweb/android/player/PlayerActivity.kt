@@ -15,6 +15,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,6 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -75,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -654,8 +658,8 @@ private fun PlayerScreen(
         previewUrl = ApiClient.previewUrl(path, ms / 1000.0)
     }
 
-    LaunchedEffect(showControls, playing, locked) {
-        if (showControls && playing && !locked) {
+    LaunchedEffect(showControls, playing, locked, showMore) {
+        if (showControls && playing && !locked && !showMore) {
             delay(4000)
             showControls = false
         }
@@ -872,23 +876,29 @@ private fun PlayerScreen(
     }
 
     if (showMore) {
-        ActionSheet(
-            title = "更多",
-            actions = listOf(
-                "截图" to { captureScreenshot() },
-                "锁定屏幕" to {
-                    locked = true
-                    showControls = false
-                },
-                "画面比例" to {
-                    resizeMode = when (resizeMode) {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
-                },
-                "音量" to { volumeDialog = true },
-            ),
+        MoreMenu(
+            volume = player.volume,
+            aspect = aspectLabel(resizeMode),
+            onSnapshot = {
+                showMore = false
+                captureScreenshot()
+            },
+            onLock = {
+                showMore = false
+                locked = true
+                showControls = false
+            },
+            onAspect = {
+                resizeMode = when (resizeMode) {
+                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            },
+            onVolume = {
+                showMore = false
+                volumeDialog = true
+            },
             onDismiss = { showMore = false },
         )
     }
@@ -1176,8 +1186,11 @@ private fun PlayerControls(
                     streamLabel.ifBlank { "转码" },
                     color = Accent,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier.padding(end = 4.dp),
                 )
+            }
+            IconButton(onClick = onMore) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
             }
         }
 
@@ -1299,9 +1312,6 @@ private fun PlayerControls(
                     TextButton(onClick = onPanel) { Text("选集", color = Color.White) }
                     IconButton(onClick = onFullscreen) {
                         Icon(Icons.Filled.Fullscreen, contentDescription = "全屏", tint = Color.White)
-                    }
-                    IconButton(onClick = onMore) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "更多", tint = Color.White)
                     }
                 }
             }
@@ -1604,6 +1614,93 @@ private fun RecentTab(
                     }
                 }
             }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- more menu */
+
+private fun aspectLabel(mode: Int): String = when (mode) {
+    AspectRatioFrameLayout.RESIZE_MODE_FIT -> "适应"
+    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "裁剪"
+    AspectRatioFrameLayout.RESIZE_MODE_FILL -> "拉伸"
+    else -> "适应"
+}
+
+@Composable
+private fun MoreMenu(
+    volume: Float,
+    aspect: String,
+    onSnapshot: () -> Unit,
+    onLock: () -> Unit,
+    onAspect: () -> Unit,
+    onVolume: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+        )
+        Surface(
+            color = Color(0xF21C1C1C),
+            shape = RoundedCornerShape(14.dp),
+            shadowElevation = 12.dp,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 54.dp, end = 10.dp)
+                .width(232.dp),
+        ) {
+            Column(Modifier.padding(vertical = 6.dp)) {
+                Text(
+                    "更多",
+                    color = TextDim,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+                MoreMenuRow(Icons.Filled.PhotoCamera, "截图", null, onSnapshot)
+                MoreMenuRow(Icons.Filled.Lock, "锁定屏幕", null, onLock)
+                MoreMenuRow(Icons.Filled.AspectRatio, "画面比例", aspect, onAspect)
+                MoreMenuRow(
+                    Icons.Filled.VolumeUp,
+                    "音量",
+                    "${(volume * 100).toInt()}%",
+                    onVolume,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreMenuRow(
+    icon: ImageVector,
+    label: String,
+    value: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Text(
+            label,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        if (!value.isNullOrBlank()) {
+            Text(value, color = TextDim, style = MaterialTheme.typography.labelMedium)
         }
     }
 }

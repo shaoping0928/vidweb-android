@@ -106,6 +106,9 @@ interface VidWebApi {
     @GET("api/files/all")
     suspend fun filesAll(@Query("limit") limit: Int = 20000): FilesInfoResponse
 
+    @POST("api/files/detect_broken")
+    suspend fun detectBroken(): ScanStartResponse
+
     @POST("api/files/info")
     suspend fun filesInfo(@Body body: PathsBody): FilesInfoResponse
 

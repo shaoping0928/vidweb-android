@@ -6,6 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,6 +78,7 @@ import com.vidweb.android.ui.common.ThumbCard
 import com.vidweb.android.ui.common.toEntry
 import com.vidweb.android.ui.theme.Accent
 import com.vidweb.android.ui.theme.TextDim
+import android.widget.Toast
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -85,7 +87,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 private val STATUS_OPTIONS = listOf(
-    "all" to "全部", "new" to "未播放", "progress" to "有进度", "played" to "已播放", "missing" to "失效",
+    "all" to "全部", "new" to "未播放", "progress" to "有进度", "played" to "已播放",
+    "missing" to "失效", "broken" to "损坏",
 )
 private val DURATION_OPTIONS = listOf(
     "all" to "全部", "short" to "10 分钟内", "medium" to "10–30 分钟", "long" to "30 分钟以上", "unknown" to "未知时长",
@@ -102,7 +105,7 @@ fun LibScreen(repo: Repo) {
     val context = LocalContext.current
 
     var search by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("all") }
+    var statuses by remember { mutableStateOf<Set<String>>(emptySet()) }
     var duration by remember { mutableStateOf("all") }
     var sort by remember { mutableStateOf("name") }
     var tagMatchAll by remember { mutableStateOf(false) }
@@ -136,7 +139,8 @@ fun LibScreen(repo: Repo) {
     fun buildRequest(folder: String? = null, offset: Int = 0, limit: Int = pageSize, tree: Boolean = false): PlaylistQueryRequest =
         PlaylistQueryRequest(
             search = search,
-            status = status,
+            status = "all",
+            statuses = statuses.toList().ifEmpty { null },
             duration = duration,
             tagIds = tagIds.toList(),
             tagMatchAll = tagMatchAll,
@@ -202,7 +206,7 @@ fun LibScreen(repo: Repo) {
     }
 
     LaunchedEffect(Unit) { loadAux() }
-    LaunchedEffect(search, status, duration, sort, tagMatchAll, tagIds, treeMode, page) {
+    LaunchedEffect(search, statuses, duration, sort, tagMatchAll, tagIds, treeMode, page) {
         load()
     }
 
@@ -210,7 +214,8 @@ fun LibScreen(repo: Repo) {
         val names = allTags.filter { tagIds.contains(it.id) }.map { it.name }
         return buildJsonObject {
             put("search", search)
-            put("status", status)
+            put("status", statuses.singleOrNull() ?: "all")
+            put("statuses", JsonArray(statuses.map { JsonPrimitive(it) }))
             put("duration", duration)
             put("sort", sort)
             put("tagMode", if (tagMatchAll) "all" else "any")
@@ -221,7 +226,13 @@ fun LibScreen(repo: Repo) {
     fun applyCollection(item: CollectionItem) {
         val filters = item.filters
         search = filters["search"]?.jsonPrimitive?.contentOrNull() ?: ""
-        status = filters["status"]?.jsonPrimitive?.contentOrNull() ?: "all"
+        val stored = (filters["statuses"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull() }.orEmpty()
+        val legacy = filters["status"]?.jsonPrimitive?.contentOrNull()
+        statuses = when {
+            stored.isNotEmpty() -> stored.toSet()
+            !legacy.isNullOrBlank() && legacy != "all" -> setOf(legacy)
+            else -> emptySet()
+        }
         duration = filters["duration"]?.jsonPrimitive?.contentOrNull() ?: "all"
         sort = filters["sort"]?.jsonPrimitive?.contentOrNull() ?: "name"
         tagMatchAll = (filters["tagMode"]?.jsonPrimitive?.contentOrNull() ?: "any") == "all"
@@ -426,18 +437,45 @@ fun LibScreen(repo: Repo) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
                 Text("筛选", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(10.dp))
-                Text("状态", style = MaterialTheme.typography.labelMedium, color = TextDim)
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("状态（可多选）", style = MaterialTheme.typography.labelMedium, color = TextDim)
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     for ((value, label) in STATUS_OPTIONS) {
+                        val selected = if (value == "all") statuses.isEmpty() else value in statuses
                         FilterChip(
-                            selected = status == value,
+                            selected = selected,
                             onClick = {
-                                status = value
+                                statuses = when {
+                                    value == "all" -> emptySet()
+                                    value in statuses -> statuses - value
+                                    else -> statuses + value
+                                }
                                 page = 1
                             },
                             label = { Text(label) },
                         )
                     }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "多选取并集；勾选「未播放 / 有进度 / 已播放」可排除损坏与失效",
+                        color = TextDim,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        scope.launch {
+                            runCatching { ApiClient.api.detectBroken() }
+                                .onSuccess {
+                                    Toast.makeText(context, "已开始检测，进度见任务页", Toast.LENGTH_SHORT).show()
+                                }
+                                .onFailure {
+                                    Toast.makeText(context, "检测启动失败", Toast.LENGTH_SHORT).show()
+                                }
+                        }
+                    }) { Text("检测损坏") }
                 }
                 Text("时长", style = MaterialTheme.typography.labelMedium, color = TextDim)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -542,7 +580,7 @@ fun LibScreen(repo: Repo) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = {
                         search = ""
-                        status = "all"
+                        statuses = emptySet()
                         duration = "all"
                         sort = "name"
                         tagIds = emptySet()

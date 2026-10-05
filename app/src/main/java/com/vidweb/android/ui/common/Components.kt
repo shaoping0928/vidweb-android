@@ -75,6 +75,7 @@ data class MediaEntry(
     val hasThumb: Boolean,
     val progress: Float,
     val exists: Boolean,
+    val broken: Boolean = false,
     val tags: List<String> = emptyList(),
 )
 
@@ -86,10 +87,12 @@ fun MediaItem.toEntry(): MediaEntry = MediaEntry(
         if (durationMs > 0 && size > 0) append(" · ")
         if (size > 0) append(Format.bytes(size))
         if (!exists) append(if (isEmpty()) "失效" else " · 失效")
+        if (broken) append(if (isEmpty()) "损坏" else " · 损坏")
     },
     hasThumb = hasThumb,
     progress = Format.percent(lastPositionMs, durationMs),
     exists = exists,
+    broken = broken,
     tags = tags,
 )
 
@@ -331,6 +334,20 @@ fun ThumbCard(
             if (selectionMode) {
                 Box(Modifier.align(Alignment.TopStart).padding(6.dp)) {
                     SelectionCircle(selected)
+                }
+            }
+            if (entry.broken) {
+                Surface(
+                    color = Danger.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                ) {
+                    Text(
+                        "损坏",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
                 }
             }
         }

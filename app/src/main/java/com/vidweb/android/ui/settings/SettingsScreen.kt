@@ -378,7 +378,7 @@ fun SettingsScreen(repo: Repo, onDisconnect: () -> Unit) {
         val version = remember { mutableStateOf("") }
         LaunchedEffect(Unit) { runCatching { ApiClient.api.config().version }.onSuccess { version.value = it } }
         Text("Media Web 服务端版本：${version.value}", color = TextDim, style = MaterialTheme.typography.labelSmall)
-        Text("Android 客户端 1.1.2", color = TextDim, style = MaterialTheme.typography.labelSmall)
+        Text("Android 客户端 1.1.3", color = TextDim, style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(20.dp))
     }
 }
