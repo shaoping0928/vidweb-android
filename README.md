@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.6**。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.7**。
 
 ## 已实现功能
 
@@ -33,6 +33,7 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 
 ### 播放器（PlayerActivity）
 - 直连播放（支持 Range 原生 seek），播放失败自动按配置回退实时转码
+- 音频编码预检：直连前用 `/api/files/probe` + `MediaCodecList` 检查设备能否解码音频，AC3/DTS/TrueHD 等不支持时直接走转码流（服务端统一输出 AAC），避免「有画面没声音」
 - 实时转码播放：`/api/transcode/stream?path=&start=`，seek = 以目标位置重新请求流；显示编码器/直通标签
 - 坏片段容错：流中断自动从当前位置 +8s 跳过（最多 4 次），失败后保留流模式可拖动重试
 - 无帧看门狗：播放 6 秒无首帧自动切实时转码或提示
@@ -115,7 +116,7 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 # release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.6-release.apk`（约 2.8 MB）与 `vidweb-1.1.6-debug.apk`。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.7-release.apk`（约 2.8 MB）与 `vidweb-1.1.7-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 

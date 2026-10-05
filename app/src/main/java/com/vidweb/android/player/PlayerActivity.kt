@@ -3,6 +3,7 @@
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.media.MediaCodecList
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -127,6 +128,33 @@ private val NETWORK_ERRORS = setOf(
     PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
     PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
 )
+
+private val AUDIO_MIME = mapOf(
+    "aac" to "audio/mp4a-latm",
+    "mp3" to "audio/mpeg",
+    "opus" to "audio/opus",
+    "vorbis" to "audio/vorbis",
+    "flac" to "audio/flac",
+    "alac" to "audio/alac",
+    "ac3" to "audio/ac3",
+    "eac3" to "audio/eac3",
+    "dts" to "audio/vnd.dts",
+    "truehd" to "audio/true-hd",
+    "amr_nb" to "audio/amr",
+    "amr_wb" to "audio/amr-wb",
+)
+
+private fun audioSupported(codec: String): Boolean {
+    val name = codec.trim().lowercase()
+    if (name.isEmpty()) return true
+    if (name.startsWith("pcm_")) return true
+    val mime = AUDIO_MIME[name] ?: return false
+    return runCatching {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+        }
+    }.getOrDefault(false)
+}
 
 class PlayerActivity : ComponentActivity() {
 
@@ -318,6 +346,12 @@ private fun PlayerScreen(
         return true
     }
 
+    fun startDirect(target: String) {
+        player.setMediaItem(MediaItem.fromUri(ApiClient.streamUrl(target)))
+        player.prepare()
+        player.play()
+    }
+
     fun playAt(i: Int) {
         val count = queue.size
         if (count == 0) return
@@ -339,9 +373,22 @@ private fun PlayerScreen(
         zoom = 1f
         panX = 0f
         panY = 0f
-        player.setMediaItem(MediaItem.fromUri(ApiClient.streamUrl(target)))
-        player.prepare()
-        player.play()
+        scope.launch {
+            val probe = runCatching { ApiClient.api.probe(target) }.getOrNull()
+            if (queue.getOrNull(index) != target) return@launch
+            val codec = probe?.audio.orEmpty()
+            if (codec.isNotBlank() && !audioSupported(codec)) {
+                if (transcodeOn) {
+                    showOsd("音频编码 ${codec.uppercase()} 设备不支持，切换实时转码…")
+                    startStream(target, 0)
+                } else {
+                    showOsd("音频编码 ${codec.uppercase()} 设备不支持，可在设置中开启服务端转码")
+                    startDirect(target)
+                }
+            } else {
+                startDirect(target)
+            }
+        }
         scope.launch { runCatching { ApiClient.api.played(PathBody(target)) } }
         fetchDetail()
         loadComments()
@@ -380,8 +427,10 @@ private fun PlayerScreen(
                 startStream(currentPath, player.currentPosition)
             } else {
                 val probe = runCatching { ApiClient.api.probe(currentPath) }.getOrNull()
-                if (probe?.playable == false) {
-                    showOsd("浏览器不支持该编码（${probe.video.uppercase()}），可在设置中开启服务端转码")
+                if (probe != null && probe.audio.isNotBlank() && !audioSupported(probe.audio)) {
+                    showOsd("音频编码 ${probe.audio.uppercase()} 设备不支持，可在设置中开启服务端转码")
+                } else if (probe?.playable == false) {
+                    showOsd("设备不支持该编码（${probe.video.uppercase()}），可在设置中开启服务端转码")
                 } else {
                     showOsd("播放失败，文件可能损坏或不完整")
                 }
