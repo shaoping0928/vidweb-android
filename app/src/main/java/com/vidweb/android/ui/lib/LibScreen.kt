@@ -106,7 +106,8 @@ fun LibScreen(repo: Repo) {
 
     var search by remember { mutableStateOf("") }
     var statuses by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var duration by remember { mutableStateOf("all") }
+    var durations by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var folderFilter by remember { mutableStateOf(true) }
     var sort by remember { mutableStateOf("name") }
     var tagMatchAll by remember { mutableStateOf(false) }
     var tagIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -136,13 +137,20 @@ fun LibScreen(repo: Repo) {
 
     val pageSize = repo.pageSize()
 
-    fun buildRequest(folder: String? = null, offset: Int = 0, limit: Int = pageSize, tree: Boolean = false): PlaylistQueryRequest =
+    fun buildRequest(
+        folder: String? = null,
+        offset: Int = 0,
+        limit: Int = pageSize,
+        tree: Boolean = false,
+        applyFilters: Boolean = true,
+    ): PlaylistQueryRequest =
         PlaylistQueryRequest(
-            search = search,
+            search = if (applyFilters) search else "",
             status = "all",
-            statuses = statuses.toList().ifEmpty { null },
-            duration = duration,
-            tagIds = tagIds.toList(),
+            statuses = if (applyFilters) statuses.toList().ifEmpty { null } else null,
+            duration = "all",
+            durations = if (applyFilters) durations.toList().ifEmpty { null } else null,
+            tagIds = if (applyFilters) tagIds.toList() else emptyList(),
             tagMatchAll = tagMatchAll,
             sort = sort,
             tree = tree,
@@ -182,7 +190,7 @@ fun LibScreen(repo: Repo) {
             treeLoading = treeLoading + node.path
             scope.launch {
                 val response = runCatching {
-                    ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500))
+                    ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500, applyFilters = folderFilter))
                 }.getOrNull()
                 treeFiles[node.path] = response?.items ?: emptyList()
                 treeLoading = treeLoading - node.path
@@ -192,7 +200,7 @@ fun LibScreen(repo: Repo) {
 
     suspend fun playFolder(node: com.vidweb.android.data.TreeNode) {
         val files = treeFiles[node.path] ?: runCatching {
-            ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500))
+            ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500, applyFilters = folderFilter))
         }.getOrNull()?.items.orEmpty()
         treeFiles[node.path] = files
         val paths = files.map { it.path }
@@ -206,7 +214,7 @@ fun LibScreen(repo: Repo) {
     }
 
     LaunchedEffect(Unit) { loadAux() }
-    LaunchedEffect(search, statuses, duration, sort, tagMatchAll, tagIds, treeMode, page) {
+    LaunchedEffect(search, statuses, durations, sort, tagMatchAll, tagIds, treeMode, page) {
         load()
     }
 
@@ -216,7 +224,9 @@ fun LibScreen(repo: Repo) {
             put("search", search)
             put("status", statuses.singleOrNull() ?: "all")
             put("statuses", JsonArray(statuses.map { JsonPrimitive(it) }))
-            put("duration", duration)
+            put("duration", durations.singleOrNull() ?: "all")
+            put("durations", JsonArray(durations.map { JsonPrimitive(it) }))
+            put("folderFilter", folderFilter)
             put("sort", sort)
             put("tagMode", if (tagMatchAll) "all" else "any")
             put("tagNames", JsonArray(names.map { JsonPrimitive(it) }))
@@ -233,7 +243,14 @@ fun LibScreen(repo: Repo) {
             !legacy.isNullOrBlank() && legacy != "all" -> setOf(legacy)
             else -> emptySet()
         }
-        duration = filters["duration"]?.jsonPrimitive?.contentOrNull() ?: "all"
+        val storedDurations = (filters["durations"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull() }.orEmpty()
+        val legacyDuration = filters["duration"]?.jsonPrimitive?.contentOrNull()
+        durations = when {
+            storedDurations.isNotEmpty() -> storedDurations.toSet()
+            !legacyDuration.isNullOrBlank() && legacyDuration != "all" -> setOf(legacyDuration)
+            else -> emptySet()
+        }
+        folderFilter = filters["folderFilter"]?.jsonPrimitive?.contentOrNull()?.toBoolean() ?: true
         sort = filters["sort"]?.jsonPrimitive?.contentOrNull() ?: "name"
         tagMatchAll = (filters["tagMode"]?.jsonPrimitive?.contentOrNull() ?: "any") == "all"
         val names = (filters["tagNames"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull() } ?: emptyList()
@@ -477,18 +494,31 @@ fun LibScreen(repo: Repo) {
                         }
                     }) { Text("检测损坏") }
                 }
-                Text("时长", style = MaterialTheme.typography.labelMedium, color = TextDim)
+                Text("时长（可多选）", style = MaterialTheme.typography.labelMedium, color = TextDim)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(DURATION_OPTIONS) { (value, label) ->
+                        val selected = if (value == "all") durations.isEmpty() else value in durations
                         FilterChip(
-                            selected = duration == value,
+                            selected = selected,
                             onClick = {
-                                duration = value
+                                durations = when {
+                                    value == "all" -> emptySet()
+                                    value in durations -> durations - value
+                                    else -> durations + value
+                                }
                                 page = 1
                             },
                             label = { Text(label) },
                         )
                     }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "树形模式：打开文件夹时应用筛选",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Switch(checked = folderFilter, onCheckedChange = { folderFilter = it })
                 }
                 Text("排序", style = MaterialTheme.typography.labelMedium, color = TextDim)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -581,7 +611,8 @@ fun LibScreen(repo: Repo) {
                     Button(onClick = {
                         search = ""
                         statuses = emptySet()
-                        duration = "all"
+                        durations = emptySet()
+                        folderFilter = true
                         sort = "name"
                         tagIds = emptySet()
                         tagMatchAll = false
@@ -665,7 +696,7 @@ fun LibScreen(repo: Repo) {
                 "整个文件夹加入播放列表" to {
                     scope.launch {
                         val files = treeFiles[node.path] ?: runCatching {
-                            ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500))
+                    ApiClient.api.queryPlaylist(buildRequest(folder = node.path, limit = 500, applyFilters = folderFilter))
                         }.getOrNull()?.items.orEmpty()
                         treeFiles[node.path] = files
                         runCatching { repo.addToPlaylist(files.map { it.path }) }

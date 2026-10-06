@@ -12,8 +12,8 @@ android {
         applicationId = "com.vidweb.android"
         minSdk = 24
         targetSdk = 33
-        versionCode = 9
-        versionName = "1.1.7"
+        versionCode = 10
+        versionName = "1.1.8"
     }
 
     buildTypes {

@@ -113,6 +113,7 @@ data class PlaylistQueryRequest(
     val status: String = "all",
     val statuses: List<String>? = null,
     val duration: String = "all",
+    val durations: List<String>? = null,
     @SerialName("tag_ids") val tagIds: List<Int> = emptyList(),
     @SerialName("tag_match_all") val tagMatchAll: Boolean = false,
     val sort: String = "name",

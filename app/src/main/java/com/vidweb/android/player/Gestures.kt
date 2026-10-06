@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -55,133 +56,152 @@ fun Modifier.playerGestures(
 ): Modifier = composed {
     var lastTapTime by remember { mutableStateOf(0L) }
     var lastTapPos by remember { mutableStateOf(Offset.Zero) }
+    val controlsVisibleState by rememberUpdatedState(controlsVisible)
 
-    pointerInput(enabled, prefs, controlsVisible) {
+    pointerInput(enabled, prefs) {
         if (!enabled) return@pointerInput
-        val compact = size.height < 360.dp.toPx()
-        val excludeTop = if (controlsVisible) (if (compact) 48.dp else 56.dp).toPx() else 0f
-        val excludeBottom = if (controlsVisible) (if (compact) 96.dp else 150.dp).toPx() else 0f
         coroutineScope {
             awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val startPos = down.position
-            val width = size.width.toFloat().coerceAtLeast(1f)
-            val height = size.height.toFloat().coerceAtLeast(1f)
-            val slop = viewConfiguration.touchSlop
-            val inControlsZone =
-                controlsVisible &&
-                    (startPos.y < excludeTop || startPos.y > height - excludeBottom)
-            var kind = GestureKind.NONE
-            var longPressFired = false
-            var total = Offset.Zero
-            var longPressJob: Job? = null
+                val controlsVisible = controlsVisibleState
+                val compact = size.height < 360.dp.toPx()
+                val excludeTop = if (controlsVisible) (if (compact) 48.dp else 56.dp).toPx() else 0f
+                val excludeBottom = if (controlsVisible) (if (compact) 96.dp else 150.dp).toPx() else 0f
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val startPos = down.position
+                val width = size.width.toFloat().coerceAtLeast(1f)
+                val height = size.height.toFloat().coerceAtLeast(1f)
+                val slop = viewConfiguration.touchSlop
+                val inControlsZone =
+                    controlsVisible &&
+                        (startPos.y < excludeTop || startPos.y > height - excludeBottom)
+                var kind = GestureKind.NONE
+                var longPressFired = false
+                var total = Offset.Zero
+                var longPressJob: Job? = null
+                var completed = false
 
-            fun cancelLongPress() {
-                longPressJob?.cancel()
-                longPressJob = null
-                if (longPressFired) {
-                    longPressFired = false
-                    onLongPressEnd()
-                }
-            }
-
-            if (prefs.longPress && !inControlsZone) {
-                longPressJob = launch {
-                    delay(viewConfiguration.longPressTimeoutMillis)
-                    if (kind == GestureKind.NONE) {
-                        longPressFired = true
-                        onLongPressStart()
-                    }
-                }
-            }
-
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.changes.none { it.pressed }) break
-                if (event.changes.any { it.isConsumed } && kind == GestureKind.NONE) {
-                    cancelLongPress()
-                }
-
-                if (event.changes.size > 1 && prefs.zoom) {
-                    if (kind != GestureKind.TRANSFORM) {
-                        cancelLongPress()
-                        if (kind == GestureKind.SEEK) onSeekEnd()
-                        kind = GestureKind.TRANSFORM
-                        onActive(true)
-                    }
-                    val zoom = event.calculateZoom()
-                    val pan = event.calculatePan()
-                    if (zoom != 1f || pan != Offset.Zero) {
-                        onTransform(zoom, pan.x, pan.y)
-                    }
-                    event.changes.forEach { it.consume() }
-                    continue
-                }
-
-                val change = event.changes.firstOrNull { it.id == down.id }
-                    ?: event.changes.firstOrNull()
-                    ?: continue
-                val delta = change.positionChange()
-                total += delta
-
-                if (kind == GestureKind.NONE) {
-                    if (total.getDistance() > slop) {
-                        cancelLongPress()
-                        kind = when {
-                            abs(total.x) > abs(total.y) ->
-                                if (prefs.seek) GestureKind.SEEK else GestureKind.NONE
-                            startPos.x < width / 2 ->
-                                if (prefs.brightness) GestureKind.BRIGHTNESS else GestureKind.NONE
-                            else ->
-                                if (prefs.volume) GestureKind.VOLUME else GestureKind.NONE
-                        }
-                        total = Offset.Zero
-                        if (kind != GestureKind.NONE) onActive(true)
+                fun cancelLongPress() {
+                    longPressJob?.cancel()
+                    longPressJob = null
+                    if (longPressFired) {
+                        longPressFired = false
+                        onLongPressEnd()
                     }
                 }
 
-                when (kind) {
-                    GestureKind.SEEK -> {
-                        onSeek(delta.x / width)
-                        change.consume()
+                fun finishGesture() {
+                    when (kind) {
+                        GestureKind.SEEK -> onSeekEnd()
+                        GestureKind.TRANSFORM, GestureKind.BRIGHTNESS, GestureKind.VOLUME -> onActive(false)
+                        else -> {}
                     }
-                    GestureKind.BRIGHTNESS -> {
-                        onBrightness(-delta.y / height)
-                        change.consume()
-                    }
-                    GestureKind.VOLUME -> {
-                        onVolume(-delta.y / height)
-                        change.consume()
-                    }
-                    else -> {}
                 }
-            }
 
-            val wasLongPress = longPressFired
-            cancelLongPress()
-            when (kind) {
-                GestureKind.SEEK -> onSeekEnd()
-                GestureKind.TRANSFORM, GestureKind.BRIGHTNESS, GestureKind.VOLUME -> onActive(false)
-                else -> {
-                    if (!wasLongPress && !inControlsZone) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastTapTime < 280 && (startPos - lastTapPos).getDistance() < 120f) {
-                            lastTapTime = 0L
-                            when {
-                                !prefs.doubleTap -> onTap()
-                                startPos.x < width * 0.35f -> onDoubleTapLeft()
-                                startPos.x > width * 0.65f -> onDoubleTapRight()
-                                else -> onDoubleTapCenter()
+                try {
+                    if (prefs.longPress && !inControlsZone) {
+                        longPressJob = launch {
+                            delay(viewConfiguration.longPressTimeoutMillis)
+                            if (kind == GestureKind.NONE) {
+                                longPressFired = true
+                                onLongPressStart()
                             }
-                        } else {
-                            lastTapTime = now
-                            lastTapPos = startPos
-                            onTap()
                         }
+                    }
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        if (event.changes.none { it.pressed }) break
+                        if (event.changes.any { it.isConsumed } && kind == GestureKind.NONE) {
+                            cancelLongPress()
+                        }
+
+                        if (event.changes.size > 1 && prefs.zoom) {
+                            if (kind != GestureKind.TRANSFORM) {
+                                cancelLongPress()
+                                if (kind == GestureKind.SEEK) onSeekEnd()
+                                kind = GestureKind.TRANSFORM
+                                onActive(true)
+                            }
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            if (zoom != 1f || pan != Offset.Zero) {
+                                onTransform(zoom, pan.x, pan.y)
+                            }
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                            ?: event.changes.firstOrNull()
+                            ?: continue
+                        val delta = change.positionChange()
+                        total += delta
+
+                        if (kind == GestureKind.NONE) {
+                            if (total.getDistance() > slop) {
+                                cancelLongPress()
+                                kind = when {
+                                    abs(total.x) > abs(total.y) ->
+                                        if (prefs.seek) GestureKind.SEEK else GestureKind.NONE
+                                    startPos.x < width / 2 ->
+                                        if (prefs.brightness) GestureKind.BRIGHTNESS else GestureKind.NONE
+                                    else ->
+                                        if (prefs.volume) GestureKind.VOLUME else GestureKind.NONE
+                                }
+                                total = Offset.Zero
+                                if (kind != GestureKind.NONE) onActive(true)
+                            }
+                        }
+
+                        when (kind) {
+                            GestureKind.SEEK -> {
+                                onSeek(delta.x / width)
+                                change.consume()
+                            }
+                            GestureKind.BRIGHTNESS -> {
+                                onBrightness(-delta.y / height)
+                                change.consume()
+                            }
+                            GestureKind.VOLUME -> {
+                                onVolume(-delta.y / height)
+                                change.consume()
+                            }
+                            else -> {}
+                        }
+                    }
+
+                    completed = true
+                    val wasLongPress = longPressFired
+                    cancelLongPress()
+                    when (kind) {
+                        GestureKind.SEEK -> onSeekEnd()
+                        GestureKind.TRANSFORM, GestureKind.BRIGHTNESS, GestureKind.VOLUME -> onActive(false)
+                        else -> {
+                            if (!wasLongPress && !inControlsZone) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastTapTime < 280 && (startPos - lastTapPos).getDistance() < 120f) {
+                                    lastTapTime = 0L
+                                    when {
+                                        !prefs.doubleTap -> onTap()
+                                        startPos.x < width * 0.35f -> onDoubleTapLeft()
+                                        startPos.x > width * 0.65f -> onDoubleTapRight()
+                                        else -> onDoubleTapCenter()
+                                    }
+                                } else {
+                                    lastTapTime = now
+                                    lastTapPos = startPos
+                                    onTap()
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    if (!completed) {
+                        cancelLongPress()
+                        finishGesture()
                     }
                 }
             }
         }
     }
-}
 }

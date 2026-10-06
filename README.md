@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.7**。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.8**。
 
 ## 已实现功能
 
@@ -18,7 +18,8 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 - 记住上次路径（`mw/lastPath`）
 
 ### 视频库
-- 筛选：文件名、状态（全部/未播放/有进度/已播放/失效/损坏，**可多选并集**，选「未播放/有进度/已播放」即排除损坏与失效）、时长（4 档）、标签（任一/全部）、排序（7 种）
+- 筛选：文件名、状态（可多选并集，含失效/损坏）、时长（4 档，可多选并集）、标签（任一/全部）、排序（7 种）
+- 树形模式：树结构与数量不受筛选影响（文件夹始终显示）；打开文件夹时按当前筛选过滤其中的视频，筛选面板可开关「打开文件夹时应用筛选」
 - 损坏检测：筛选面板「检测损坏」触发服务端 ffprobe 全库检测（任务页看进度），损坏文件卡片显示红色「损坏」徽标；缩略图生成失败也会被动标记
 - 智能合集：应用筛选、保存当前筛选、管理（重命名 / 用当前筛选更新 / 删除）、数量徽标
 - 卡片网格（16:9 缩略图、续播进度条、失效标记）；树形模式在列表内原地展开/收起目录（可整目录播放）
@@ -116,7 +117,7 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 # release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.7-release.apk`（约 2.8 MB）与 `vidweb-1.1.7-debug.apk`。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.8-release.apk`（约 2.8 MB）与 `vidweb-1.1.8-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 
