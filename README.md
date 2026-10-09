@@ -1,6 +1,6 @@
 # VidWeb Android
 
-Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.8**。
+Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer），对接 `../vidweb` 的 FastAPI 后端，功能对齐 Web 前端的主要能力并增加移动端手势等增强。后端无需改动，仅需在客户端填写服务器地址。当前版本 **1.1.9**。
 
 ## 已实现功能
 
@@ -67,6 +67,11 @@ Media Web 的 Android 客户端（Kotlin + Jetpack Compose + Media3/ExoPlayer）
 - 缩略图仅在条目可见时轮询重试（4 秒 × 30 次）；`MediaEntry` 标注 `@Immutable` 并用 `remember` 缓存，Coil `ImageRequest` 复用
 - 播放器启用解码器自动回退（`setEnableDecoderFallback`）与无帧看门狗，减少黑屏/硬解失败
 
+### 界面适配
+- 手机：底部导航栏；竖屏播放器 + 下方内容区
+- 平板 / 宽屏（宽度 ≥ 600dp）：左侧导航栏（NavigationRail）、视频库网格按宽度自适应列数、连接页限宽居中
+- 平板播放器允许自由旋转：竖屏为「播放器 + 内容区」，横屏为全屏播放；全屏按钮与返回键逻辑同步适配
+
 ## 技术栈
 
 | 组件 | 版本 |
@@ -117,7 +122,7 @@ $env:JAVA_HOME="E:\jdk\jdk-19.0.2"
 # release：app/build/outputs/apk/release/app-release.apk（R8 + 资源压缩）
 ```
 
-本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.8-release.apk`（约 2.8 MB）与 `vidweb-1.1.8-debug.apk`。
+本仓库已在本机验证构建通过（Gradle 8.2 + AGP 8.1.4 + Kotlin 1.9.22）。Release 使用 debug 签名配置（`signingConfig = signingConfigs.getByName("debug")`），可直接安装；当前产物为 `vidweb-1.1.9-release.apk`（约 2.8 MB）与 `vidweb-1.1.9-debug.apk`。
 
 安装：`adb install -r app\build\outputs\apk\debug\app-debug.apk`，或直接把 APK 拷到手机安装。
 

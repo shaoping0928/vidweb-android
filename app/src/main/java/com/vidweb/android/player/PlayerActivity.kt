@@ -163,6 +163,9 @@ class PlayerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (resources.configuration.smallestScreenWidthDp >= 600) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
         val paths = intent.getStringArrayListExtra("paths")?.toList().orEmpty()
         val index = intent.getIntExtra("index", 0)
         val renderers = DefaultRenderersFactory(this).setEnableDecoderFallback(true)
@@ -200,6 +203,7 @@ private fun PlayerScreen(
     val repo = remember { (activity.application as com.vidweb.android.VidWebApp).repo }
     val exoPlayer = player
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val tablet = activity.resources.configuration.smallestScreenWidthDp >= 600
 
     val gesturePrefs = remember {
         val obj = repo.getJsonObject("mw/gestures")
@@ -448,19 +452,23 @@ private fun PlayerScreen(
 
     fun exitFullscreen() {
         fullscreen = false
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity.requestedOrientation = if (tablet) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         controller.show(WindowInsetsCompat.Type.systemBars())
     }
 
     fun toggleFullscreen() {
-        if (landscape || fullscreen) exitFullscreen() else enterFullscreen()
+        if (fullscreen || (landscape && !tablet)) exitFullscreen() else enterFullscreen()
     }
 
     fun handleBack() {
         if (showPanel) {
             showPanel = false
-        } else if (landscape || fullscreen) {
+        } else if (fullscreen || (landscape && !tablet)) {
             exitFullscreen()
         } else {
             activity.finish()

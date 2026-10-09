@@ -390,7 +390,7 @@ fun LibScreen(repo: Repo) {
                 items.isEmpty() -> EmptyHint(if (filtered > 0) "当前页无内容" else "没有匹配的视频")
                 else -> {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Adaptive(minSize = 156.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),

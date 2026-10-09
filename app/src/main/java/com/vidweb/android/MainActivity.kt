@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
@@ -26,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -39,9 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -125,11 +130,15 @@ private fun SetupScreen(
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    Column(
+    Box(
         modifier = Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.Center,
     ) {
+        Column(
+            modifier = Modifier.widthIn(max = 440.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         Icon(Icons.Filled.VideoLibrary, contentDescription = null, tint = Accent)
         Spacer(Modifier.height(12.dp))
         Text("连接 VidWeb 服务器", style = MaterialTheme.typography.titleLarge)
@@ -172,6 +181,7 @@ private fun SetupScreen(
                 Text(message, color = if (message.startsWith("连接成功")) Accent else MaterialTheme.colorScheme.error)
             }
         }
+        }
     }
 }
 
@@ -191,45 +201,84 @@ private fun MainShell(repo: Repo, onDisconnect: () -> Unit) {
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+    val onSelect: (String) -> Unit = { route ->
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    if (wide) {
+        Row(Modifier.fillMaxSize()) {
+            NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
                 for (item in NAV_ITEMS) {
-                    NavigationBarItem(
+                    NavigationRailItem(
                         selected = currentRoute == item.route,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onClick = { onSelect(item.route) },
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
                     )
                 }
             }
-        },
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = "path",
-            modifier = Modifier.padding(padding),
-        ) {
-            composable("path") { PathScreen(repo) }
-            composable("lib") { LibScreen(repo) }
-            composable("search") { SearchScreen(repo) }
-            composable("tags") { TagsScreen(repo, onOpenTag = { id, name ->
-                navController.navigate("tagfiles/$id?name=${android.net.Uri.encode(name)}")
-            }) }
-            composable("tagfiles/{id}?name={name}") { entry ->
-                val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
-                val name = entry.arguments?.getString("name") ?: "标签"
-                TagFilesScreen(repo, id, name, onBack = { navController.popBackStack() })
-            }
-            composable("tasks") { TasksScreen(repo) }
-            composable("settings") { SettingsScreen(repo, onDisconnect = onDisconnect) }
+            AppNavHost(
+                navController = navController,
+                repo = repo,
+                onDisconnect = onDisconnect,
+                modifier = Modifier.weight(1f),
+            )
         }
+    } else {
+        Scaffold(
+            bottomBar = {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    for (item in NAV_ITEMS) {
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = { onSelect(item.route) },
+                            icon = { Icon(item.icon, contentDescription = item.label) },
+                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                        )
+                    }
+                }
+            },
+        ) { padding ->
+            AppNavHost(
+                navController = navController,
+                repo = repo,
+                onDisconnect = onDisconnect,
+                modifier = Modifier.padding(padding),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppNavHost(
+    navController: NavHostController,
+    repo: Repo,
+    onDisconnect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = "path",
+        modifier = modifier,
+    ) {
+        composable("path") { PathScreen(repo) }
+        composable("lib") { LibScreen(repo) }
+        composable("search") { SearchScreen(repo) }
+        composable("tags") { TagsScreen(repo, onOpenTag = { id, name ->
+            navController.navigate("tagfiles/$id?name=${android.net.Uri.encode(name)}")
+        }) }
+        composable("tagfiles/{id}?name={name}") { entry ->
+            val id = entry.arguments?.getString("id")?.toIntOrNull() ?: 0
+            val name = entry.arguments?.getString("name") ?: "标签"
+            TagFilesScreen(repo, id, name, onBack = { navController.popBackStack() })
+        }
+        composable("tasks") { TasksScreen(repo) }
+        composable("settings") { SettingsScreen(repo, onDisconnect = onDisconnect) }
     }
 }
